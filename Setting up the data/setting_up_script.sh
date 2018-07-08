@@ -40,11 +40,11 @@ cd ..
 mkdir cats_bigger_than_64x64
 mkdir cats_bigger_than_128x128
 wget -nc https://raw.githubusercontent.com/AlexiaJM/Deep-learning-with-cats/master/preprocess_cat_dataset.py
-python preprocess_cat_dataset.py
+python3 preprocess_cat_dataset.py
 
 ## Removing cat_dataset
 rm -r cat_dataset
 
 ## Move to your favorite place
-#mv cats_bigger_than_64x64 /home/alexia/Datasets/Meow_64x64
-#mv cats_bigger_than_128x128 /home/alexia/Datasets/Meow_128x128
+mv cats_bigger_than_64x64 /mnt/harddrive2/Datasets/Meow_64x64/
+mv cats_bigger_than_128x128 /mnt/harddrive2/Datasets/Meow_128x128/
