@@ -6,6 +6,7 @@ import glob
 import math
 import sys
 
+
 def rotateCoords(coords, center, angleRadians):
 	# Positive y is down so reverse the angle, too.
 	angleRadians = -angleRadians
@@ -26,8 +27,8 @@ def rotateCoords(coords, center, angleRadians):
 		i += 1
 	return newCoords
 
-def preprocessCatFace(coords, image):
 
+def preprocessCatFace(coords, image):
 	leftEyeX, leftEyeY = coords[0], coords[1]
 	rightEyeX, rightEyeY = coords[2], coords[3]
 	mouthX = coords[4]
@@ -50,14 +51,14 @@ def preprocessCatFace(coords, image):
 
 	# Straighten the image and fill in gray for blank borders.
 	rotation = cv2.getRotationMatrix2D(
-			eyesCenter, eyesAngleDegrees, 1.0)
+		eyesCenter, eyesAngleDegrees, 1.0)
 	imageSize = image.shape[1::-1]
 	straight = cv2.warpAffine(image, rotation, imageSize,
 							  borderValue=(128, 128, 128))
 
 	# Straighten the coordinates of the features.
 	newCoords = rotateCoords(
-			coords, eyesCenter, eyesAngleRadians)
+		coords, eyesCenter, eyesAngleRadians)
 
 	# Make the face as wide as the space between the ear bases.
 	w = abs(newCoords[16] - newCoords[6])
@@ -65,19 +66,20 @@ def preprocessCatFace(coords, image):
 	h = w
 	# Put the center point between the eyes at (0.5, 0.4) in
 	# proportion to the entire face.
-	minX = eyesCenter[0] - w/2
+	minX = eyesCenter[0] - w / 2
 	if minX < 0:
 		w += minX
 		minX = 0
-	minY = eyesCenter[1] - h*2/5
+	minY = eyesCenter[1] - h * 2 / 5
 	if minY < 0:
 		h += minY
 		minY = 0
 
 	# Crop the face.
-	crop = straight[int(minY):int(minY+h), int(minX):int(minX+w)]
+	crop = straight[int(minY):int(minY + h), int(minX):int(minX + w)]
 	# Return the crop.
 	return crop
+
 
 def describePositive():
 	output = open('log.txt', 'w')
@@ -98,20 +100,21 @@ def describePositive():
 			continue
 		# Save the crop to folders based on size
 		h, w, colors = crop.shape
-		if min(h,w) >= 64:
-			Path1 = imagePath.replace("cat_dataset","cats_bigger_than_64x64")
+		if min(h, w) >= 64:
+			Path1 = imagePath.replace("cat_dataset", "cats_bigger_than_64x64")
 			cv2.imwrite(Path1, crop)
-		if min(h,w) >= 128:
-			Path2 = imagePath.replace("cat_dataset","cats_bigger_than_128x128")
+		if min(h, w) >= 128:
+			Path2 = imagePath.replace("cat_dataset", "cats_bigger_than_128x128")
 			cv2.imwrite(Path2, crop)
-		# Append the cropped face and its bounds to the
-		# positive description.
-		#h, w = crop.shape[:2]
-		#print (cropPath, 1, 0, 0, w, h, file=output)
+	# Append the cropped face and its bounds to the
+	# positive description.
+	# h, w = crop.shape[:2]
+	# print (cropPath, 1, 0, 0, w, h, file=output)
 
 
 def main():
 	describePositive()
+
 
 if __name__ == '__main__':
 	main()
