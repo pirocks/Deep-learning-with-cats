@@ -9,9 +9,10 @@
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--image_size', type=int, default=128)
-parser.add_argument('--batch_size', type=int, default=32)  # DCGAN paper original value used 128
-parser.add_argument('--n_colors', type=int, default=3)
+parser.add_argument('--audio_size', type=int, default=1000)
+parser.add_argument('--num_layers', type=int, default=4)
+parser.add_argument('--batch_size', type=int, default=8)  # DCGAN paper original value used 128
+# parser.add_argument('--n_colors', type=int, default=3)
 parser.add_argument('--z_size', type=int, default=100)  # DCGAN paper original value
 parser.add_argument('--G_h_size', type=int, default=200,
                     help='Number of hidden nodes in the Generator. Too small leads to bad results, too big blows up the GPU RAM.')  # DCGAN paper original value
@@ -26,8 +27,8 @@ parser.add_argument('--beta1', type=float, default=0.5,
 parser.add_argument('--SELU', type=bool, default=False,
                     help='Using scaled exponential linear units (SELU) which are self-normalizing instead of ReLU with BatchNorm. This improves stability.')
 parser.add_argument('--seed', type=int)
-parser.add_argument('--input_folder', default='/mnt/harddrive2/Datasets/flowers', help='input folder')
-parser.add_argument('--output_folder', default='/mnt/harddrive2/Output/DCGAN/flowers', help='output folder')
+parser.add_argument('--input_folder', default='/mnt/harddrive2/Datasets/piano-audio', help='input folder')
+parser.add_argument('--output_folder', default='/mnt/harddrive2/Output/DCGAN/piano-audio', help='output folder')
 parser.add_argument('--G_load', default='',
                     help='Full path to Generator model to load (ex: /home/output_folder/run-5/models/G_epoch_11.pth)')
 parser.add_argument('--D_load', default='',
@@ -56,14 +57,14 @@ run = 0
 base_dir = str(param.output_folder) + "/run-" + str(run)
 while os.path.exists(base_dir):
     run += 1
-    base_dir = str(param.output_folder) + "/run" + str(run)
+    base_dir = str(param.output_folder) + "/run-" + str(run)
 os.mkdir(base_dir)
 logs_dir = str(base_dir) + "/logs"
 os.mkdir(logs_dir)
-os.mkdir(base_dir + "/images")
+os.mkdir(base_dir + "/audio_files")
 os.mkdir(base_dir + "/models")
 if param.gen_extra_images > 0:
-    os.mkdir(base_dir + "/images/extra")
+    os.mkdir(base_dir + "/audio_files/extra")
 
 # where we save the output
 log_output = open(logs_dir + "/log.txt", 'w')
@@ -80,11 +81,12 @@ from tensorboard_logger import configure, log_value
 
 configure(logs_dir, flush_secs=5)
 
-import torchvision
+# import torchvision
 import torchvision.datasets as dset
-import torchvision.transforms as transf
-import torchvision.models as models
-import torchvision.utils as vutils
+import torchaudio.transforms as transf
+
+# import torchvision.models as models
+# import torchvision.utils as vutils
 
 if param.cuda:
     import torch.backends.cudnn as cudnn
@@ -92,11 +94,11 @@ if param.cuda:
     cudnn.benchmark = True
 
 # To see images
-from IPython.display import Image
+# from IPython.display import Image
 
-to_img = transf.ToPILImage()
+# to_img = transf.ToPILImage()
 
-import math
+# import math
 
 ## Setting seed
 import random
@@ -109,17 +111,25 @@ torch.manual_seed(param.seed)
 if param.cuda:
     torch.cuda.manual_seed_all(param.seed)
 
-## Transforming images
+## Transforming audio files
 trans = transf.Compose([
-    transf.Scale((param.image_size, param.image_size)),
-    # This makes it into [0,1]
-    transf.ToTensor(),
+    transf.Scale(),  # This makes it into [-1,1]
+    # transf.ToTensor(),
+    transf.PadTrim(max_len=param.audio_size),  # I don't know if this is needed
     # This makes it into [-1,1] so tanh will work properly
-    transf.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    # transf.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
 ])
 
+
+def load_sound(path):
+    tensor_to_load_into = None
+    import torchaudio
+    out, sample_rate = torchaudio.load(path, tensor_to_load_into)
+    return out
+
+
 ## Importing dataset
-data = dset.ImageFolder(root=param.input_folder, transform=trans)
+data = dset.DatasetFolder(root=param.input_folder, transform=trans, loader=load_sound, extensions=["mid", "mp3"])
 
 # Loading data in batch
 dataset = torch.utils.data.DataLoader(data, batch_size=param.batch_size, shuffle=True, num_workers=param.n_workers)
@@ -137,7 +147,7 @@ class DCGAN_G(torch.nn.Module):
         main = torch.nn.Sequential()
 
         # We need to know how many layers we will use at the beginning
-        mult = param.image_size // 8
+        mult = param.audio_size // 128
 
         ### Start block
         # Z_size random numbers
@@ -169,8 +179,8 @@ class DCGAN_G(torch.nn.Module):
         ### End block
         # Size = G_h_size x image_size/2 x image_size/2
         main.add_module('End-ConvTranspose2d',
-                        torch.nn.ConvTranspose2d(param.G_h_size, param.n_colors, kernel_size=4, stride=2, padding=1,
-                                                 bias=False))
+                        torch.nn.ConvTranspose2d(param.G_h_size, 4, kernel_size=4, stride=2, padding=1,
+                                                 bias=False))  # param.n_colors
         main.add_module('End-Tanh', torch.nn.Tanh())
         # Size = n_colors x image_size x image_size
         self.main = main
@@ -192,12 +202,12 @@ class DCGAN_D(torch.nn.Module):
         ### Start block
         # Size = n_colors x image_size x image_size
         main.add_module('Start-Conv2d',
-                        torch.nn.Conv2d(param.n_colors, param.D_h_size, kernel_size=4, stride=2, padding=1, bias=False))
+                        torch.nn.Conv2d(10, param.D_h_size, kernel_size=4, stride=2, padding=1, bias=False))
         if param.SELU:
             main.add_module('Start-SELU', torch.nn.SELU(inplace=True))
         else:
             main.add_module('Start-LeakyReLU', torch.nn.LeakyReLU(0.2, inplace=True))
-        image_size_new = param.image_size // 2
+        image_size_new = param.audio_size // 128
         # Size = D_h_size x image_size/2 x image_size/2
 
         ### Middle block (Done until we reach ? x 4 x 4)
@@ -205,12 +215,12 @@ class DCGAN_D(torch.nn.Module):
         i = 0
         while image_size_new > 4:
             main.add_module('Middle-Conv2d [%d]' % i,
-                            torch.nn.Conv2d(param.D_h_size * mult, param.D_h_size * (2 * mult), kernel_size=4, stride=2,
+                            torch.nn.Conv2d(param.D_h_size * mult, param.D_h_size * (mult), kernel_size=4, stride=2,
                                             padding=1, bias=False))
             if param.SELU:
                 main.add_module('Middle-SELU [%d]' % i, torch.nn.SELU(inplace=True))
             else:
-                main.add_module('Middle-BatchNorm2d [%d]' % i, torch.nn.BatchNorm2d(param.D_h_size * (2 * mult)))
+                main.add_module('Middle-BatchNorm2d [%d]' % i, torch.nn.BatchNorm2d(param.D_h_size * (mult)))
                 main.add_module('Middle-LeakyReLU [%d]' % i, torch.nn.LeakyReLU(0.2, inplace=True))
             # Size = (D_h_size*(2*i)) x image_size/(2*i) x image_size/(2*i)
             image_size_new = image_size_new // 2
@@ -269,7 +279,7 @@ print(D, file=log_output)
 criterion = torch.nn.BCELoss()
 
 # Soon to be variables
-x = torch.FloatTensor(param.batch_size, param.n_colors, param.image_size, param.image_size)
+x = torch.FloatTensor(param.batch_size, 10, param.audio_size, param.audio_size)
 y = torch.FloatTensor(param.batch_size)
 z = torch.FloatTensor(param.batch_size, param.z_size, 1, 1)
 # This is to see during training, size and values won't change
@@ -304,15 +314,17 @@ for epoch in range(param.n_epoch):
 
     # Fake images saved
     fake_test = G(z_test)
-    vutils.save_image(fake_test.data, '%s/run-%d/images/fake_samples_epoch%03d.png' % (param.output_folder, run, epoch),
-                      normalize=True)
-    for ext in range(param.gen_extra_images):
-        z_extra = torch.FloatTensor(param.batch_size, param.z_size, 1, 1).normal_(0, 1)
-        if param.cuda:
-            z_extra = z_extra.cuda()
-        fake_test = G(Variable(z_extra))
-        vutils.save_image(fake_test.data, '%s/run-%d/images/extra/fake_samples_epoch%03d_extra%01d.png' % (
-            param.output_folder, run, epoch, ext), normalize=True)
+    from torchaudio import save
+
+    save('%s/run-%d/audio_files/fake_samples_epoch%03d.midi' % (param.output_folder, run, epoch), fake_test.data, 20000)
+    save('%s/run-%d/audio_files/fake_samples_epoch%03d.mps' % (param.output_folder, run, epoch), fake_test.data, 20000)
+    # for ext in range(param.gen_extra_images):#todo
+    #     z_extra = torch.FloatTensor(param.batch_size, param.z_size, 1, 1).normal_(0, 1)
+    #     if param.cuda:
+    #         z_extra = z_extra.cuda()
+    #     fake_test = G(Variable(z_extra))
+    #     vutils.save_image(fake_test.data, '%s/run-%d/images/extra/fake_samples_epoch%03d_extra%01d.png' % (
+    #         param.output_folder, run, epoch, ext), normalize=True)
 
     for i, data_batch in enumerate(dataset, 0):
         ########################
@@ -325,13 +337,13 @@ for epoch in range(param.n_epoch):
         # Train with real data
         D.zero_grad()
         # We can ignore labels since they are all cats!
-        images, labels = data_batch
+        audio_files, labels = data_batch
         # Mostly necessary for the last one because if N might not be a multiple of batch_size
-        current_batch_size = images.size(0)
+        current_batch_size = audio_files.size(0)
         if param.cuda:
-            images = images.cuda()
+            audio_files = audio_files.cuda()
         # Transfer batch of images to x
-        x.data.resize_as_(images).copy_(images)
+        x.data.resize_as_(audio_files).copy_(audio_files)
         # y is now a vector of size current_batch_size filled with 1
         y.data.resize_(current_batch_size).fill_(1)
         y_pred = D(x)

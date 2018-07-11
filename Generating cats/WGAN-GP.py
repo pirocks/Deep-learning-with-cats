@@ -12,8 +12,8 @@
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--image_size', type=int, default=64)
-parser.add_argument('--batch_size', type=int, default=64)
+parser.add_argument('--image_size', type=int, default=128)
+parser.add_argument('--batch_size', type=int, default=16)
 parser.add_argument('--n_colors', type=int, default=3)
 parser.add_argument('--z_size', type=int, default=100)  # DCGAN paper original value
 parser.add_argument('--G_h_size', type=int, default=128,
@@ -33,8 +33,8 @@ parser.add_argument('--penalty', type=float, default=10, help='Gradient penalty 
 parser.add_argument('--SELU', type=bool, default=False,
                     help='Using scaled exponential linear units (SELU) which are self-normalizing instead of ReLU with BatchNorm. This improves stability.')
 parser.add_argument('--seed', type=int)
-parser.add_argument('--input_folder', default='/home/alexia/Datasets/Meow_64x64', help='input folder')
-parser.add_argument('--output_folder', default='/home/alexia/Output/WGAN-GP', help='output folder')
+parser.add_argument('--input_folder', default='/mnt/harddrive2/Datasets/flowers', help='input folder')
+parser.add_argument('--output_folder', default='/mnt/harddrive2/Output/WGAN-GP', help='output folder')
 parser.add_argument('--G_load', default='',
                     help='Full path to Generator model to load (ex: /home/output_folder/run-5/models/G_epoch_11.pth)')
 parser.add_argument('--D_load', default='',
